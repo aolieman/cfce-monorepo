@@ -1,46 +1,15 @@
 #![cfg(test)]
 extern crate std;
 
-use std::{println as info, println as warn};
-use crate::{contract::Credits, CreditsClient};
 use soroban_sdk::{
   testutils::Address as _, token, Address, Env, String
 };
 
-use crate::tests::utils::{deploy_native_sac, create_account_entry};
-
-fn create_contract<'a>(
-  e: &Env,
-  admin: &Address,
-  initiative: &String,
-  provider: &Address,
-  vendor: &Address,
-  bucket: i128,
-  xlm: &Address,
-  carbonSac: &Address,
-  sink: &Address,
-  soroswapRouter: &Address
-) -> CreditsClient<'a> {
-  info!("Creating contract...");
-
-  let contract_id = e.register(
-    Credits,
-    (
-      admin.clone(),
-      initiative.clone(),
-      provider.clone(),
-      vendor.clone(),
-      bucket,
-      xlm.clone(),
-      carbonSac.clone(),
-      sink.clone(),
-      soroswapRouter.clone()
-    )
-  );
-  let contract_client = CreditsClient::new(e, &contract_id);
-  warn!("Contract created!");
-  contract_client
-}
+use crate::tests::utils::{
+  deploy_native_sac,
+  create_account_entry,
+  create_credit_contract,
+};
 
 #[test]
 fn test_views() {
@@ -58,7 +27,7 @@ fn test_views() {
   let sink = Address::generate(&e);
   let soroswapRouter = Address::generate(&e);
 
-  let credit = create_contract(
+  let credit = create_credit_contract(
     &e,
     &admin,
     &initiative,
@@ -107,7 +76,7 @@ fn test_donate() {
   let sink = Address::generate(&e);
   let soroswapRouter = Address::generate(&e);
 
-  let credit = create_contract(
+  let credit = create_credit_contract(
     &e,
     &admin,
     &initiative,
