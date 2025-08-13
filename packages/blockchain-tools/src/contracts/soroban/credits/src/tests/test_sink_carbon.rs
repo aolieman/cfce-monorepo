@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use soroban_sdk::{
   testutils::{Address as _, MockAuth, MockAuthInvoke},
   Address, IntoVal,
