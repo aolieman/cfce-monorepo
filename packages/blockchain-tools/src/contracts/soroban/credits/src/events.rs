@@ -61,6 +61,11 @@ pub(crate) fn sinkChange(e: &Env, oldValue: Address, newValue: Address) {
   e.events().publish(topics, (oldValue, newValue));
 }
 
+pub(crate) fn usdcChange(e: &Env, oldValue: Address, newValue: Address) {
+  let topics = (symbol_short!("usdc"), symbol_short!("change"));
+  e.events().publish(topics, (oldValue, newValue));
+}
+
 pub(crate) fn soroswapRouterChange(e: &Env, oldValue: Address, newValue: Address) {
   let topics = (symbol_short!("router"), symbol_short!("change"));
   e.events().publish(topics, (oldValue, newValue));

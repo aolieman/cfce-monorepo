@@ -11,19 +11,20 @@ use soroban_sdk::{contracttype, Address, Bytes, Env, String};
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    Admin,
-    Balance,
-    Bucket,
-    Initiative,
-    Minimum,
-    Provider,
-    ProviderFees,
-    Vendor,
-    VendorFees,
-    XLMContract,
-    CarbonSac,
-    SinkContract,
-    SoroswapRouter
+  Admin,
+  Balance,
+  Bucket,
+  Initiative,
+  Minimum,
+  Provider,
+  ProviderFees,
+  Vendor,
+  VendorFees,
+  XLMContract,
+  USDCContract,
+  CarbonSac,
+  SinkContract,
+  SoroswapRouter
 }
 
 //pub fn instance_bump(e: &Env){
@@ -157,58 +158,44 @@ pub fn write_vendor_fees(e: &Env, value: i128) {
   e.storage().instance().set(&key, &value);
 }
 
-pub fn read_xlm_contract(e: &Env) -> Address {
-  let key = DataKey::XLMContract;
-  let val = e.storage().persistent().get(&key);
-  match val {
-    Some(addr) => addr,
-    None => zero_address(&e)
-  }
+fn _get_contract_address(e: &Env, key: &DataKey) -> Address {
+  e.storage()
+    .persistent()
+    .get::<_, Address>(key)
+    .unwrap_or_else(|| zero_address(e))
 }
 
-pub fn write_xlm_contract(e: &Env, value: &Address) {
-  let key = DataKey::XLMContract;
-  e.storage().persistent().set(&key, &value);
+pub fn read_token_contracts(e: &Env) -> (Address, Address, Address) {
+  (
+    _get_contract_address(e, &DataKey::XLMContract),
+    _get_contract_address(e, &DataKey::USDCContract),
+    _get_contract_address(e, &DataKey::CarbonSac),
+  )
 }
 
-pub fn read_carbon_sac(e: &Env) -> Address {
-  let key: DataKey = DataKey::CarbonSac;
-  let val: Option<Address> = e.storage().persistent().get(&key);
-  match val {
-    Some(addr) => addr,
-    None => zero_address(&e)
-  }
+pub fn write_token_contracts(
+  e: &Env,
+  xlm: &Address,
+  usdc: &Address,
+  carbonSac: &Address
+) {
+  e.storage().persistent().set(&DataKey::XLMContract, &xlm);
+  e.storage().persistent().set(&DataKey::USDCContract, &usdc);
+  e.storage().persistent().set(&DataKey::CarbonSac, &carbonSac);
 }
 
-pub fn write_carbon_sac(e: &Env, value: &Address) {
-  let key = DataKey::CarbonSac;
-  e.storage().persistent().set(&key, &value);
+pub fn read_external_contracts(e: &Env) -> (Address, Address) {
+  (
+    _get_contract_address(e, &DataKey::SinkContract),
+    _get_contract_address(e, &DataKey::SoroswapRouter)
+  )
 }
 
-pub fn read_sink_contract(e: &Env) -> Address {
-  let key: DataKey = DataKey::SinkContract;
-  let val: Option<Address> = e.storage().persistent().get(&key);
-  match val {
-    Some(addr) => addr,
-    None => zero_address(&e)
-  }
-}
-
-pub fn write_sink_contract(e: &Env, value: &Address) {
-  let key = DataKey::SinkContract;
-  e.storage().persistent().set(&key, &value);
-}
-
-pub fn read_soroswap_router(e: &Env) -> Address {
-  let key: DataKey = DataKey::SoroswapRouter;
-  let val: Option<Address> = e.storage().persistent().get(&key);
-  match val {
-    Some(addr) => addr,
-    None => zero_address(&e)
-  }
-}
-
-pub fn write_soroswap_router(e: &Env, value: &Address) {
-  let key = DataKey::SoroswapRouter;
-  e.storage().persistent().set(&key, &value);
+pub fn write_external_contracts(
+  e: &Env,
+  sink: &Address,
+  soroswapRouter: &Address
+) {
+  e.storage().persistent().set(&DataKey::SinkContract, &sink);
+  e.storage().persistent().set(&DataKey::SoroswapRouter, &soroswapRouter);
 }
