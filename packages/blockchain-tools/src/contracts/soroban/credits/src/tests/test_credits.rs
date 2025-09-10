@@ -20,7 +20,6 @@ use crate::tests::utils::{
 #[test]
 fn test_views() {
   let test = CreditTest::setup();
-  test.e.budget().reset_unlimited();
 
   // Views should all pass
   assert_eq!(test.credit.getAdmin(), test.admin);
@@ -39,20 +38,19 @@ fn test_views() {
 #[test]
 fn test_donate() {
   let test = CreditTest::setup();
-  test.e.budget().reset_unlimited();
   
   let donor_pubkey = "GDUY7J7A33TQWOSOQGDO776GGLM3UQERL4J3SPT56F6YS4ID7MLDERI4";
   let donor = Address::from_str(&test.e, donor_pubkey);
 
   create_account_entry(&test.e, &donor_pubkey, 10_000_000_000);
-  assert_eq!(test.xlm.balance(&donor), 10_000_000_000);
+  assert_eq!(test.xlm_client.balance(&donor), 10_000_000_000);
 
   // Donate
   test.credit.donate(&donor, &100_000_000);
 
   assert_eq!(test.credit.getBalance(), 90_000_000); // amount - vendor fees
   assert_eq!(test.credit.getContractXLMBalance(), 90_000_000);
-  assert_eq!(test.xlm.balance(&donor), 9_900_000_000);
+  assert_eq!(test.xlm_client.balance(&donor), 9_900_000_000);
 }
 
 #[test]
@@ -111,15 +109,27 @@ fn test_set_sink_to_successor() {
 #[test]
 fn test_token_swap_via_soroswap() {
   let test = CreditTest::setup();
-  test.e.budget().reset_unlimited();
 
   let user = Address::generate(&test.e);
-  test.xlm.transfer(&test.admin, &user, &10_000);
+  test.xlm_client.transfer(&test.admin, &user, &10_000);
 
-  assert_eq!(test.xlm.balance(&user), 10_000);
-  assert_eq!(test.carbonSac.balance(&user), 0);
+  assert_eq!(test.xlm_client.balance(&user), 10_000);
+  assert_eq!(test.carbon_client.balance(&user), 0);
 
-  test.credit.swap_tokens_via_soroswap(&user, &10_000);
+  test.credit.swap_xlm_to_carbon(&user, &10_000);
+  
+  /*
+    1. first swap for XLM <-> USDC with 10_000 XLM
+    - fee = 10000 * 3 / 1000 =  30
+    - amount_in less fee = 10000 - 30 = 9970
+    - first_out = (9970 * 3_200_000_000)/(32_000_000_000 + 9970) = 996.999689372 = 996
 
-  assert!(test.carbonSac.balance(&user) > 0);
+    2. second swap for USDC <-> CARBON with 996 USDC
+    - fee = 996 * 3 / 1000 =  2.988 (2)
+    - amount_in less fee = 996 - 2 = 994
+    - first_out = (994 * 160_000_000)/(3_200_000_000 + 994) = 49.6999845619 = 49
+   */
+  let expected_balance = 49;
+  let executed_carbon_balance = test.carbon_client.balance(&user);
+  assert_eq!(executed_carbon_balance, expected_balance);
 }

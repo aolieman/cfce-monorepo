@@ -100,8 +100,8 @@ impl Credits {
     events::donation(&e, from, provider, amount);
   }
 
-  pub fn swap_tokens_via_soroswap(e: Env, from: Address, xlm_amounts: i128) {
-    if xlm_amounts <= 0 { panic!("amount less than zero") }
+  pub fn swap_xlm_to_carbon(e: Env, from: Address, xlm_amount: i128) {
+    if xlm_amount <= 0 { panic!("amount less than zero") }
     from.require_auth();
 
     let (xlm, usdc, carbon) = read_token_contracts(&e);
@@ -115,11 +115,13 @@ impl Credits {
     path.push_back(carbon.clone());
 
     let deadline = e.ledger().timestamp() + 60;  // valid for 1 min
+
+    // TODO: consider adding a carbon_minimum argumen
     soroswap_router_client.swap_exact_tokens_for_tokens(
-      &xlm_amounts, // amount_in
+      &xlm_amount, // amount_in
       &0,           // amount_out_min
-      &path,       // path 
-      &from,      // to 
+      &path,        // path 
+      &from,        // to 
       &deadline,    // deadline
     );
   }

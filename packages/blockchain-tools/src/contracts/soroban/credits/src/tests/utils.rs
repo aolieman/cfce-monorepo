@@ -4,15 +4,16 @@ use stellar_strkey;
 use std::println as info;
 use soroban_env_host::{budget::AsBudget, Env as _, EnvBase};
 use soroban_sdk::{
-  testutils::{Address as _, Ledger},
-  xdr::{self, Asset, Limits, WriteXdr},
-  Address, Env, FromVal, String,
+  testutils::{
+    Address as _, Ledger, StellarAssetContract
+  },
   token,
+  xdr::{self, Asset, Limits, WriteXdr},
+  Address, Env, FromVal, String
 };
 use crate::{
   contract::Credits,
   CreditsClient,
-  mintable_token,
   sink_contract,
   soroswap_router,
   soroswap_factory,
@@ -77,25 +78,14 @@ pub fn setup_tokens<'a>(
   e: &Env,
   admin: &Address
 ) -> (
-  token::Client<'a>,
-  mintable_token::Client<'a>,
-  mintable_token::Client<'a>,
-
+  Address,
+  StellarAssetContract,
+  StellarAssetContract
 ) {
-  let usdc  = mintable_token::Client::new(
-    &e,
-    &e.register_stellar_asset_contract_v2(admin.clone()).address()
-  );
-
-  let xlm_address = deploy_native_sac(&e);
-  let xlm = token::Client::new(&e, &xlm_address);
-
-  let carbonSac = mintable_token::Client::new(
-    &e,
-    &e.register_stellar_asset_contract_v2(admin.clone()).address()
-  );
-
-  (xlm, usdc, carbonSac)
+  let xlm_id = deploy_native_sac(&e);
+  let usdc_sac = e.register_stellar_asset_contract_v2(admin.clone());
+  let carbon_sac = e.register_stellar_asset_contract_v2(admin.clone());
+  (xlm_id, usdc_sac, carbon_sac)
 }
 
 pub fn create_credit_contract<'a>(
@@ -162,21 +152,26 @@ pub fn create_sink_successors(e: &Env) -> (Address, Address) {
 pub fn setup_soroswap_env<'a>(
   e: &Env,
   admin: &Address,
-  xlm: &token::Client<'a>,
-  usdc: &mintable_token::Client<'a>,
-  carbonSac: &mintable_token::Client<'a>,
+  xlm_id: &Address,
+  usdc_sac: &StellarAssetContract,
+  carbon_sac: &StellarAssetContract,
 ) -> soroswap_router::Client<'a> {
-  let xlm_liqudity: i64 = 1_000_000_000_000_000;
-  let usdc_liquidity: i128 = 1_000_000_000_000_000;
-  let carbon_liquidity: i128 = 1_000_000_000_000_000;
+  let xlm_liquidity: i64 = 32_000_000_000;
+  let usdc_liquidity: i128 = 3_200_000_000;
+  let carbon_liquidity: i128 = 160_000_000;
 
   let xlm_minter_pubkey = "GA2H3SJYGIUG2DXXUZ7IN3LNO2AIMVWCDCL25PKQHKMC76OWW3HYQHY4";
   let xlm_minter_address = Address::from_str(&e, xlm_minter_pubkey);
+
   create_account_entry(&e, &xlm_minter_pubkey, i64::MAX);
 
-  xlm.transfer(&xlm_minter_address, &admin, &(i64::MAX as i128));
-  usdc.mint(&admin, &(usdc_liquidity * 2));
-  carbonSac.mint(&admin, &(carbon_liquidity * 2));
+  let xlm_client = token::Client::new(&e, xlm_id);
+  let usdc_client = token::StellarAssetClient::new(&e, &usdc_sac.address());
+  let carbon_client = token::StellarAssetClient::new(&e, &carbon_sac.address());
+
+  xlm_client.transfer(&xlm_minter_address, &admin, &(i64::MAX as i128));
+  usdc_client.mint(&admin, &(i128::MAX));
+  carbon_client.mint(&admin, &(i128::MAX));
 
   // prepare soroswap factory
   let pair_hash = e.deployer().upload_contract_wasm(soroswap_pair::WASM);
@@ -187,9 +182,9 @@ pub fn setup_soroswap_env<'a>(
   let factory_client = soroswap_factory::Client::new(&e, &factory_address);
   factory_client.initialize(&admin, &pair_hash);
 
-  // prepare two pairs
-  factory_client.create_pair(&xlm.address, &usdc.address);
-  factory_client.create_pair(&usdc.address, &carbonSac.address);
+  // // prepare two pairs
+  // factory_client.create_pair(&xlm.address, &usdc.address);
+  // factory_client.create_pair(&usdc.address, &carbonSac.address);
 
   // prepare router
   let router_address = e.register(
@@ -199,7 +194,7 @@ pub fn setup_soroswap_env<'a>(
   let router_client = soroswap_router::Client::new(&e, &router_address);
   router_client.initialize(&factory_address);
 
-  // add liquidity for usdc <-> carbon
+  // add liquidity for usdc <-> carbon = 3_200_000_000 : 160_000_000 = 20 : 1
   let ledger_timestamp = 100;
   let first_liquidity_add_desired_deadline = 1000;
 
@@ -208,8 +203,8 @@ pub fn setup_soroswap_env<'a>(
   });
 
   router_client.add_liquidity(
-    &usdc.address,
-    &carbonSac.address,
+    &usdc_sac.address(),
+    &carbon_sac.address(),
     &usdc_liquidity,
     &carbon_liquidity,
     &0,
@@ -218,16 +213,16 @@ pub fn setup_soroswap_env<'a>(
     &first_liquidity_add_desired_deadline
   );
 
-  // add liqudiity for xlm <-> usdc
+  // add liqudiity for xlm <-> usdc = 32_000_000_000 : 3_200_000_000 = 10 : 1
   e.ledger().with_mut(|li| {
     li.timestamp = first_liquidity_add_desired_deadline + 1;
   });
   let second_liquidity_add_desired_deadline = 2000;
 
   router_client.add_liquidity(
-    &xlm.address,
-    &usdc.address,
-    &(xlm_liqudity as i128),
+    &xlm_id,
+    &usdc_sac.address(),
+    &(xlm_liquidity as i128),
     &usdc_liquidity,
     &0,
     &0,
@@ -240,10 +235,8 @@ pub fn setup_soroswap_env<'a>(
 
 pub struct CreditTest<'a> {
   pub e: Env,
-  pub soroswap_router: soroswap_router::Client<'a>,
-  pub xlm: token::Client<'a>,
-  pub usdc: mintable_token::Client<'a>,
-  pub carbonSac: mintable_token::Client<'a>,
+  pub xlm_client: token::Client<'a>,
+  pub carbon_client: token::Client<'a>, // token::StellarAssetClient<'a>
   pub admin: Address,
   pub initiative: String,
   pub bucket: i128,
@@ -258,14 +251,14 @@ impl<'a> CreditTest<'a> {
     e.mock_all_auths();
 
     let admin = Address::generate(&e);
-    let (xlm, usdc, carbonSac) = setup_tokens(&e, &admin);
+    let (xlm_id, usdc_sac, carbon_sac) = setup_tokens(&e, &admin);
 
     let soroswap_router = setup_soroswap_env(
       &e,
       &admin,
-      &xlm,
-      &usdc,
-      &carbonSac
+      &xlm_id,
+      &usdc_sac,
+      &carbon_sac
     );
 
     let initiative = String::from_str(&e, "30c0636f-b0f1-40d5-bb9c-a531dc4d69e2");
@@ -282,19 +275,20 @@ impl<'a> CreditTest<'a> {
       &provider,
       &vendor,
       bucket,
-      &xlm.address,
-      &usdc.address,
-      &carbonSac.address,
+      &xlm_id,
+      &usdc_sac.address(),
+      &carbon_sac.address(),
       &first_sink,
       &soroswap_router.address
     );
 
+    let xlm_client = token::Client::new(&e, &xlm_id);
+    let carbon_client = token::Client::new(&e, &carbon_sac.address());
+
     CreditTest {
       e,
-      soroswap_router,
-      xlm,
-      usdc,
-      carbonSac,
+      xlm_client,
+      carbon_client,
       admin,
       initiative,
       bucket,

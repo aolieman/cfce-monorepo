@@ -15,12 +15,6 @@ mod sink_contract {
   );
 }
 
-mod mintable_token {
-  soroban_sdk::contractimport!(
-    file = "external-contracts/mintable_token_contract.wasm"
-  );
-}
-
 mod soroswap_router {
   soroban_sdk::contractimport!(
     file = "external-contracts/soroswap_router_contract.wasm"
