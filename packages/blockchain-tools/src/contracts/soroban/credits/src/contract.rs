@@ -10,13 +10,22 @@ use crate::storage::{
   read_provider_fees, write_provider_fees,
   read_vendor, write_vendor,
   read_vendor_fees, write_vendor_fees,
-  read_xlm_contract, write_xlm_contract,
-  read_carbon_sac, write_carbon_sac,
-  read_sink_contract, write_sink_contract,
-  read_soroswap_router, write_soroswap_router
+  read_token_contracts, write_token_contracts,
+  read_external_contracts, write_external_contracts,
 };
-use soroban_sdk::{contract, contractimpl, token, Address, Env, String, Error};
+
+use soroban_sdk::{
+  contract,
+  contractimpl,
+  token,
+  Address,
+  Env,
+  String,
+  Error,
+  Vec
+};
 use crate::sink_contract;
+use crate::soroswap_router;
 
 #[contract]
 pub struct Credits;
@@ -31,6 +40,7 @@ impl Credits {
     vendor: Address,
     bucket: i128,
     xlm: Address,
+    usdc: Address,
     carbonSac: Address,
     sink: Address,
     soroswapRouter: Address
@@ -44,11 +54,8 @@ impl Credits {
     write_provider_fees(&e, 90);
     write_vendor(&e, &vendor);
     write_vendor_fees(&e, 10);
-    write_xlm_contract(&e, &xlm);
-    write_carbon_sac(&e, &carbonSac);
-    write_sink_contract(&e, &sink);
-    write_soroswap_router(&e, &soroswapRouter);
-
+    write_token_contracts(&e, &xlm, &usdc, &carbonSac);
+    write_external_contracts(&e, &sink, &soroswapRouter);
     Ok(())
   }
 
@@ -72,9 +79,9 @@ impl Credits {
     let pfees = (amount * providerFees / 100) as i128;
     let vfees = (amount * vendorFees / 100) as i128;
 
-    //instance_bump(&e);
-    let ctr = &read_xlm_contract(&e);
-    let xlm = token::Client::new(&e, &ctr);
+    // instance_bump(&e);
+    let (ctr, _, _) = read_token_contracts(&e);
+    let xlm: token::TokenClient<'_> = token::Client::new(&e, &ctr);
     xlm.transfer(&from, &thisctr, &amount); // From donor to contract
     if vfees > 0 {
       let vendor = read_vendor(&e);
@@ -93,6 +100,32 @@ impl Credits {
     events::donation(&e, from, provider, amount);
   }
 
+  pub fn swap_xlm_to_carbon(e: Env, from: Address, xlm_amount: i128) {
+    if xlm_amount <= 0 { panic!("amount less than zero") }
+    from.require_auth();
+
+    let (xlm, usdc, carbon) = read_token_contracts(&e);
+
+    let (_, soroswapRouter) = read_external_contracts(&e);
+    let soroswap_router_client = soroswap_router::Client::new(&e, &soroswapRouter);
+
+    let mut path: Vec<Address> = Vec::new(&e);
+    path.push_back(xlm.clone());
+    path.push_back(usdc.clone());
+    path.push_back(carbon.clone());
+
+    let deadline = e.ledger().timestamp() + 60;  // valid for 1 min
+
+    // TODO: consider adding a carbon_minimum argumen
+    soroswap_router_client.swap_exact_tokens_for_tokens(
+      &xlm_amount, // amount_in
+      &0,           // amount_out_min
+      &path,        // path 
+      &from,        // to 
+      &deadline,    // deadline
+    );
+  }
+
   //---- VIEWS
 
   pub fn getAdmin(e: Env) -> Address {
@@ -103,9 +136,9 @@ impl Credits {
     read_balance(&e)
   }
 
-  pub fn getContractBalance(e: Env) -> i128 {
+  pub fn getContractXLMBalance(e: Env) -> i128 {
     let adr = e.current_contract_address();
-    let ctr = read_xlm_contract(&e);
+    let (ctr, _, _) = read_token_contracts(&e);
     let xlm = token::Client::new(&e, &ctr);
     xlm.balance(&adr)
   }
@@ -138,20 +171,13 @@ impl Credits {
     read_vendor_fees(&e)
   }
 
-  pub fn getXLM(e: Env) -> Address {
-    read_xlm_contract(&e)
+  pub fn getTokens(e: Env) -> (Address, Address, Address) {
+    // read_xlm_contract(&e)
+    read_token_contracts(&e)
   }
 
-  pub fn getCarbonSac(e: Env) -> Address {
-    read_carbon_sac(&e)
-  }
-
-  pub fn getSink(e: Env) -> Address {
-    read_sink_contract(&e)
-  }
-
-  pub fn getSoroswapRouter(e: Env) -> Address {
-    read_soroswap_router(&e)
+  pub fn getExternalContracts(e: Env) -> (Address, Address) {
+    read_external_contracts(&e)
   }
 
   //---- UPDATES
@@ -212,26 +238,34 @@ impl Credits {
     events::vendorFees(&e, oldval, newval);
   }
 
-  pub fn setXLMContract(e: Env, newval: Address) {
+  pub fn setXLMToken(e: Env, newval: Address) {
     check_admin(&e);
     //instance_bump(&e);
-    let oldval = read_xlm_contract(&e);
-    write_xlm_contract(&e, &newval);
+    let (oldval, usdc, carbonSac) = read_token_contracts(&e);
+    write_token_contracts(&e, &newval, &usdc, &carbonSac);
     events::xlmChange(&e, oldval, newval);
   }
 
-  pub fn setSinkContract(e: Env, newval: Address) {
+  pub fn setUSDCToken(e: Env, newval: Address) {
     check_admin(&e);
     //instance_bump(&e);
-    let oldval = read_sink_contract(&e);
-    write_sink_contract(&e, &newval);
-    events::sinkChange(&e, oldval, newval);
+    let (xlm, oldval, carbonSac) = read_token_contracts(&e);
+    write_token_contracts(&e, &xlm, &newval, &carbonSac);
+    events::usdcChange(&e, oldval, newval);
+  }
+
+  pub fn setCarbonSacToken(e: Env, newval: Address) {
+    check_admin(&e);
+    //instance_bump(&e);
+    let (xlm, usdc, oldval) = read_token_contracts(&e);
+    write_token_contracts(&e, &xlm, &usdc, &newval);
+    events::usdcChange(&e, oldval, newval);
   }
 
   pub fn setSinkToSuccessor(e: Env) {
     check_admin(&e);
     //instance_bump(&e);
-    let oldAddr = read_sink_contract(&e);
+    let (oldAddr, soroswapRouter) = read_external_contracts(&e);
     let mut sinkContractAddr = oldAddr.clone();
 
     loop {
@@ -244,15 +278,15 @@ impl Credits {
       sinkContractAddr = successor;
     }
 
-    write_sink_contract(&e, &sinkContractAddr);
+    write_external_contracts(&e, &sinkContractAddr, &soroswapRouter);
     events::sinkChange(&e, oldAddr, sinkContractAddr);
   }
 
   pub fn setSoroswapRouter(e: Env, newval: Address) {
     check_admin(&e);
     //instance_bump(&e);
-    let oldval = read_soroswap_router(&e);
-    write_soroswap_router(&e, &newval);
+    let (sink, oldval) = read_external_contracts(&e);
+    write_external_contracts(&e, &sink, &newval);
     events::soroswapRouterChange(&e, oldval, newval);
   }
 }
