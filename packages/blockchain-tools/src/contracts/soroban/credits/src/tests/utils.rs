@@ -74,10 +74,7 @@ pub fn create_account_entry(env: &Env, pubkey: &str, balance: i64) {
   }).unwrap();
 }
 
-pub fn setup_tokens<'a>(
-  e: &Env,
-  admin: &Address
-) -> (
+pub fn setup_tokens<'a>(e: &Env, admin: &Address) -> (
   Address,
   StellarAssetContract,
   StellarAssetContract
@@ -94,7 +91,6 @@ pub fn create_credit_contract<'a>(
   initiative: &String,
   provider: &Address,
   vendor: &Address,
-  bucket: i128,
   xlm: &Address,
   usdc: &Address,
   carbonSac: &Address,
@@ -110,7 +106,6 @@ pub fn create_credit_contract<'a>(
       initiative.clone(),
       provider.clone(),
       vendor.clone(),
-      bucket,
       xlm.clone(),
       usdc.clone(),
       carbonSac.clone(),
@@ -239,7 +234,6 @@ pub struct CreditTest<'a> {
   pub carbon_client: token::Client<'a>, // token::StellarAssetClient<'a>
   pub admin: Address,
   pub initiative: String,
-  pub bucket: i128,
   pub provider: Address,
   pub vendor: Address,
   pub credit: CreditsClient<'a>
@@ -262,7 +256,6 @@ impl<'a> CreditTest<'a> {
     );
 
     let initiative = String::from_str(&e, "30c0636f-b0f1-40d5-bb9c-a531dc4d69e2");
-    let bucket = 200_000_000;
     let provider = Address::generate(&e);
     let vendor = Address::generate(&e);
 
@@ -274,7 +267,6 @@ impl<'a> CreditTest<'a> {
       &initiative,
       &provider,
       &vendor,
-      bucket,
       &xlm_id,
       &usdc_sac.address(),
       &carbon_sac.address(),
@@ -291,7 +283,6 @@ impl<'a> CreditTest<'a> {
       carbon_client,
       admin,
       initiative,
-      bucket,
       provider,
       vendor,
       credit

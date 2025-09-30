@@ -25,7 +25,7 @@ fn test_views() {
   assert_eq!(test.credit.getAdmin(), test.admin);
   assert_eq!(test.credit.getBalance(), 0);
   assert_eq!(test.credit.getContractXLMBalance(), 0);
-  assert_eq!(test.credit.getBucket(), test.bucket);
+  assert_eq!(test.credit.getBucket(), 1000000);
   assert_eq!(test.credit.getInitiative(), test.initiative);
   assert_eq!(test.credit.getMinimum(), 1000000);
   assert_eq!(test.credit.getProvider(), test.provider);
@@ -48,8 +48,21 @@ fn test_donate() {
   // Donate
   test.credit.donate(&donor, &100_000_000);
 
-  assert_eq!(test.credit.getBalance(), 90_000_000); // amount - vendor fees
-  assert_eq!(test.credit.getContractXLMBalance(), 90_000_000);
+  /*
+    1. first swap for XLM <-> USDC with 10_000 XLM
+    - fee = 90_000_000 * 3 / 1000 =  270000
+    - amount_in less fee = 90_000_000 - 270000 = 89730000
+    - first_out = (89730000 * 3_200_000_000)/(32_000_000_000 + 89730000) = 8947909.50251 = 8947909
+
+    2. second swap for USDC <-> CARBON with 8947909 USDC
+    - fee = 8947909 * 3 / 1000 =  26843.727 (2)
+    - amount_in less fee = 8947909 - 26843 = 8921066
+    - first_out = (8921066 * 160_000_000)/(3_200_000_000 + 8921066) = 444813 = 444813
+   */
+
+  let expected_swapped_carbon_balance = 444813;
+  assert_eq!(test.credit.getBalance(), expected_swapped_carbon_balance);
+  assert_eq!(test.credit.getContractXLMBalance(), 0);
   assert_eq!(test.xlm_client.balance(&donor), 9_900_000_000);
 }
 
@@ -59,7 +72,7 @@ fn test_set_sink_to_successor() {
   e.mock_all_auths();
 
   let admin = Address::generate(&e);
-  let bucket = 200_000_000;
+  // let bucket = 200_000_000; TODO: use this in sink
 
   let initiative = String::from_str(&e, "30c0636f-b0f1-40d5-bb9c-a531dc4d69e2");
   let provider = Address::generate(&e);
@@ -77,7 +90,6 @@ fn test_set_sink_to_successor() {
     &initiative,
     &provider,
     &vendor,
-    bucket,
     &xlm,
     &usdc,
     &carbonSac,

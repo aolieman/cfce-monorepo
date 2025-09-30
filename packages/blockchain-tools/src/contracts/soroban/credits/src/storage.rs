@@ -13,7 +13,6 @@ use soroban_sdk::{contracttype, Address, Bytes, Env, String};
 pub enum DataKey {
   Admin,
   Balance,
-  Bucket,
   Initiative,
   Minimum,
   Provider,
@@ -58,20 +57,6 @@ pub fn increment_balance(e: &Env, amount: i128) -> i128 {
 pub fn write_balance(e: &Env, amount: i128) {
   let key = DataKey::Balance;
   e.storage().persistent().set(&key, &amount);
-}
-
-pub fn read_bucket(e: &Env) -> i128 {
-  let key = DataKey::Bucket;
-  let val = e.storage().instance().get(&key);
-  match val {
-    Some(amount) => amount,
-    None => 0
-  }
-}
-
-pub fn write_bucket(e: &Env, value: i128) {
-  let key = DataKey::Bucket;
-  e.storage().instance().set(&key, &value);
 }
 
 pub fn read_initiative(e: &Env) -> String {

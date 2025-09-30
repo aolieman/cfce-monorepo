@@ -3,7 +3,6 @@ use crate::admin::{check_admin, read_administrator, write_administrator};
 use crate::events;
 use crate::storage::{
   read_balance, write_balance,
-  read_bucket, write_bucket,
   read_initiative, write_initiative,
   read_minimum, write_minimum,
   read_provider, write_provider,
@@ -15,14 +14,8 @@ use crate::storage::{
 };
 
 use soroban_sdk::{
-  contract,
-  contractimpl,
-  token,
-  Address,
-  Env,
-  String,
-  Error,
-  Vec
+  contract, contractimpl, token,
+  Address, Env, String, Error, Vec
 };
 use crate::sink_contract;
 use crate::soroswap_router;
@@ -38,7 +31,6 @@ impl Credits {
     initiative: String,
     provider: Address,
     vendor: Address,
-    bucket: i128,
     xlm: Address,
     usdc: Address,
     carbonSac: Address,
@@ -47,7 +39,6 @@ impl Credits {
   ) -> Result<(), Error> {
     write_administrator(&e, &admin);
     write_balance(&e, 0);
-    write_bucket(&e, bucket);
     write_initiative(&e, initiative);
     write_minimum(&e, 1000000);
     write_provider(&e, &provider);
@@ -75,19 +66,27 @@ impl Credits {
     let providerFees = read_provider_fees(&e);
     let vendorFees = read_vendor_fees(&e);
     let balance = read_balance(&e);
-    let bucket = read_bucket(&e);
-    let pfees = (amount * providerFees / 100) as i128;
-    let vfees = (amount * vendorFees / 100) as i128;
+    let bucket = Self::getBucket(e.clone());
 
     // instance_bump(&e);
     let (ctr, _, _) = read_token_contracts(&e);
     let xlm: token::TokenClient<'_> = token::Client::new(&e, &ctr);
     xlm.transfer(&from, &thisctr, &amount); // From donor to contract
-    if vfees > 0 {
+
+    let xlmProviderFees = (amount * providerFees / 100) as i128;
+    let carbonProviderfees = Self::swap_xlm_to_carbon(
+      e.clone(),
+      thisctr.clone(),
+      xlmProviderFees
+    );
+
+    let xlmVendorFees = (amount * vendorFees / 100) as i128;
+
+    if xlmVendorFees > 0 {
       let vendor = read_vendor(&e);
-      xlm.transfer(&thisctr, &vendor, &vfees); // Vendor fees from contract to vendor
+      xlm.transfer(&thisctr, &vendor, &xlmVendorFees); // Vendor fees from contract to vendor
     }
-    let newbalance = balance + pfees; // Accumulate carbon credits
+    let newbalance = balance + carbonProviderfees; // Accumulate carbon credits
     if newbalance >= bucket {
       let reminder = newbalance % bucket;
       let credits  = newbalance - reminder;
@@ -100,7 +99,7 @@ impl Credits {
     events::donation(&e, from, provider, amount);
   }
 
-  pub fn swap_xlm_to_carbon(e: Env, from: Address, xlm_amount: i128) {
+  pub fn swap_xlm_to_carbon(e: Env, from: Address, xlm_amount: i128) -> i128 {
     if xlm_amount <= 0 { panic!("amount less than zero") }
     from.require_auth();
 
@@ -117,13 +116,16 @@ impl Credits {
     let deadline = e.ledger().timestamp() + 60;  // valid for 1 min
 
     // TODO: consider adding a carbon_minimum argumen
-    soroswap_router_client.swap_exact_tokens_for_tokens(
+    let executed_amounts = soroswap_router_client.swap_exact_tokens_for_tokens(
       &xlm_amount, // amount_in
       &0,           // amount_out_min
       &path,        // path 
       &from,        // to 
       &deadline,    // deadline
     );
+
+    // executed_amounts.get(0): amount_in, 1: first_out, 2: expected_amount_out);
+    executed_amounts.get(2).unwrap()
   }
 
   //---- VIEWS
@@ -144,7 +146,9 @@ impl Credits {
   }
 
   pub fn getBucket(e: Env) -> i128 {
-    read_bucket(&e)
+    let (sinkContractAddr, soroswapRouter) = read_external_contracts(&e);
+    let sink_client = sink_contract::Client::new(&e, &sinkContractAddr);
+    sink_client.get_minimum_sink_amount().into()
   }
 
   pub fn getInitiative(e: Env) -> String {
@@ -188,14 +192,6 @@ impl Credits {
     let admin = read_administrator(&e);
     write_administrator(&e, &newval);
     events::admin(&e, admin, newval);
-  }
-
-  pub fn setBucket(e: Env, newval: i128) {
-    check_admin(&e);
-    //instance_bump(&e);
-    let oldval = read_bucket(&e);
-    write_bucket(&e, newval);
-    events::bucket(&e, oldval, newval);
   }
 
   pub fn setMinimum(e: Env, newval: i128) {

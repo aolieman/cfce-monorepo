@@ -546,21 +546,6 @@
                         "key": {
                           "vec": [
                             {
-                              "symbol": "Bucket"
-                            }
-                          ]
-                        },
-                        "val": {
-                          "i128": {
-                            "hi": 0,
-                            "lo": 200000000
-                          }
-                        }
-                      },
-                      {
-                        "key": {
-                          "vec": [
-                            {
                               "symbol": "Initiative"
                             }
                           ]

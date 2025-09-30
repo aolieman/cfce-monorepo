@@ -6,11 +6,6 @@ pub(crate) fn admin(e: &Env, oldValue: Address, newValue: Address) {
   e.events().publish(topics, (oldValue, newValue));
 }
 
-pub(crate) fn bucket(e: &Env, oldValue: i128, newValue: i128) {
-  let topics = (symbol_short!("bucket"), symbol_short!("change"));
-  e.events().publish(topics, (oldValue, newValue));
-}
-
 pub(crate) fn donation(e: &Env, from: Address, destin: Address, amount: i128) {
   let topics = (symbol_short!("donation"), from, destin);
   e.events().publish(topics, amount);
