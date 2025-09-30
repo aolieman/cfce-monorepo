@@ -72,7 +72,6 @@ fn test_set_sink_to_successor() {
   e.mock_all_auths();
 
   let admin = Address::generate(&e);
-  // let bucket = 200_000_000; TODO: use this in sink
 
   let initiative = String::from_str(&e, "30c0636f-b0f1-40d5-bb9c-a531dc4d69e2");
   let provider = Address::generate(&e);
