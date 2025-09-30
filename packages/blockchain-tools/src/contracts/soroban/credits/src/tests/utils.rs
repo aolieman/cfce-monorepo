@@ -163,15 +163,15 @@ pub fn setup_soroswap_env<'a>(
   let xlm_minter_pubkey = "GA2H3SJYGIUG2DXXUZ7IN3LNO2AIMVWCDCL25PKQHKMC76OWW3HYQHY4";
   let xlm_minter_address = Address::from_str(&e, xlm_minter_pubkey);
 
-  create_account_entry(&e, &xlm_minter_pubkey, i64::MAX);
+  create_account_entry(&e, &xlm_minter_pubkey, 2 * xlm_liquidity as i64);
 
   let xlm_client = token::Client::new(&e, xlm_id);
   let usdc_client = token::StellarAssetClient::new(&e, &usdc_sac.address());
   let carbon_client = token::StellarAssetClient::new(&e, &carbon_sac.address());
 
-  xlm_client.transfer(&xlm_minter_address, &admin, &(i64::MAX as i128));
-  usdc_client.mint(&admin, &(i128::MAX));
-  carbon_client.mint(&admin, &(i128::MAX));
+  xlm_client.transfer(&xlm_minter_address, &admin, &(2 * xlm_liquidity as i128));
+  usdc_client.mint(&admin, &(2 * usdc_liquidity));
+  carbon_client.mint(&admin, &(2 * carbon_liquidity));
 
   // prepare soroswap factory
   let pair_hash = e.deployer().upload_contract_wasm(soroswap_pair::WASM);
