@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
+
 use soroban_sdk::{contracttype, Address, Bytes, Env, String};
+use crate::sink_contract;
 
 //pub(crate) const DAY_IN_LEDGERS: u32 = 17280;
 //pub(crate) const BALANCE_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
@@ -14,7 +16,7 @@ pub enum DataKey {
   Admin,
   Balance,
   Initiative,
-  Minimum,
+  MinimumDonation,
   Provider,
   ProviderFees,
   Vendor,
@@ -73,8 +75,8 @@ pub fn write_initiative(e: &Env, value: String) {
   e.storage().instance().set(&key, &value);
 }
 
-pub fn read_minimum(e: &Env) -> i128 {
-  let key = DataKey::Minimum;
+pub fn read_minimum_donation(e: &Env) -> i128 {
+  let key = DataKey::MinimumDonation;
   let val = e.storage().instance().get(&key);
   match val {
     Some(amount) => amount,
@@ -82,8 +84,8 @@ pub fn read_minimum(e: &Env) -> i128 {
   }
 }
 
-pub fn write_minimum(e: &Env, value: i128) {
-  let key = DataKey::Minimum;
+pub fn write_minimum_donation(e: &Env, value: i128) {
+  let key = DataKey::MinimumDonation;
   e.storage().instance().set(&key, &value);
 }
 
@@ -183,4 +185,10 @@ pub fn write_external_contracts(
 ) {
   e.storage().persistent().set(&DataKey::SinkContract, &sink);
   e.storage().persistent().set(&DataKey::SoroswapRouter, &soroswapRouter);
+}
+
+pub fn read_bucket_from_sink(e: &Env) -> i128 {
+  let (sinkContractAddr, _) = read_external_contracts(e);
+  let sink_client = sink_contract::Client::new(e, &sinkContractAddr);
+  sink_client.get_minimum_sink_amount().into()
 }

@@ -4,13 +4,14 @@ use crate::events;
 use crate::storage::{
   read_balance, write_balance,
   read_initiative, write_initiative,
-  read_minimum, write_minimum,
+  read_minimum_donation, write_minimum_donation,
   read_provider, write_provider,
   read_provider_fees, write_provider_fees,
   read_vendor, write_vendor,
   read_vendor_fees, write_vendor_fees,
   read_token_contracts, write_token_contracts,
   read_external_contracts, write_external_contracts,
+  read_bucket_from_sink,
 };
 
 use soroban_sdk::{
@@ -40,7 +41,7 @@ impl Credits {
     write_administrator(&e, &admin);
     write_balance(&e, 0);
     write_initiative(&e, initiative);
-    write_minimum(&e, 1000000);
+    write_minimum_donation(&e, 1000000);
     write_provider(&e, &provider);
     write_provider_fees(&e, 90);
     write_vendor(&e, &vendor);
@@ -58,7 +59,7 @@ impl Credits {
 
   pub fn donate(e: Env, from: Address, amount: i128) {
     if amount <= 0 { panic!("amount less than zero") }
-    let minimum = read_minimum(&e);
+    let minimum = read_minimum_donation(&e);
     if amount < minimum { panic!("amount less than minimum allowed") }
     from.require_auth();
     let thisctr = &e.current_contract_address();
@@ -66,7 +67,7 @@ impl Credits {
     let providerFees = read_provider_fees(&e);
     let vendorFees = read_vendor_fees(&e);
     let balance = read_balance(&e);
-    let bucket = Self::getBucket(e.clone());
+    let bucket = read_bucket_from_sink(&e);
 
     // instance_bump(&e);
     let (ctr, _, _) = read_token_contracts(&e);
@@ -146,9 +147,7 @@ impl Credits {
   }
 
   pub fn getBucket(e: Env) -> i128 {
-    let (sinkContractAddr, soroswapRouter) = read_external_contracts(&e);
-    let sink_client = sink_contract::Client::new(&e, &sinkContractAddr);
-    sink_client.get_minimum_sink_amount().into()
+    read_bucket_from_sink(&e)
   }
 
   pub fn getInitiative(e: Env) -> String {
@@ -156,7 +155,7 @@ impl Credits {
   }
 
   pub fn getMinimum(e: Env) -> i128 {
-    read_minimum(&e)
+    read_minimum_donation(&e)
   }
 
   pub fn getProvider(e: Env) -> Address {
@@ -197,8 +196,8 @@ impl Credits {
   pub fn setMinimum(e: Env, newval: i128) {
     check_admin(&e);
     //instance_bump(&e);
-    let oldval = read_minimum(&e);
-    write_minimum(&e, newval);
+    let oldval = read_minimum_donation(&e);
+    write_minimum_donation(&e, newval);
     events::minimum(&e, oldval, newval);
   }
 
